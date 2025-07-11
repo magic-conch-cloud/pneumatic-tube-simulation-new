@@ -64,7 +64,7 @@
 
 ## 5. 참고 문헌
 
-[7] Ramakrishnan, L. (2016). “Pneumatic Tube System”. SlideShare. https://www.slideshare.net/slideshow/pneumatic-tube-system/66658538 (visited on July 8, 2025)
-[8] Shawal Ronaldo7. (n.d.). “Pneumatic Tubing System”. SlideShare. https://www.slideshare.net/slideshow/pneumatic-tubing-system/126973871 (visited on July 8, 2025)
-[9] Ahmed Abd El Moniem. (2023). “Pneumatic Tube System”. SlideShare. https://www.slideshare.net/slideshow/pneumatic-tube-system-257717172/257717172 (visited on July 8, 2025)
-[10] Chakraborty, Gour. C. (n.d.). “Pneumatic Tube System Presentation Hospital - full 97-2003”. SlideShare. https://www.slideshare.net/slideshow/pneumatic-tube-system-presentation-hospital-full-972003/69712858 (visited on July 8, 2025)
+[7] Ramakrishnan, L. (2016). “Pneumatic Tube System”. SlideShare. https://www.slideshare.net/slideshow/pneumatic-tube-system/66658538 (visited on July 8, 2025) <be/>
+[8] Shawal Ronaldo7. (n.d.). “Pneumatic Tubing System”. SlideShare. https://www.slideshare.net/slideshow/pneumatic-tubing-system/126973871 (visited on July 8, 2025)<be/>
+[9] Ahmed Abd El Moniem. (2023). “Pneumatic Tube System”. SlideShare. https://www.slideshare.net/slideshow/pneumatic-tube-system-257717172/257717172 (visited on July 8, 2025)<be/>
+[10] Chakraborty, Gour. C. (n.d.). “Pneumatic Tube System Presentation Hospital - full 97-2003”. SlideShare. https://www.slideshare.net/slideshow/pneumatic-tube-system-presentation-hospital-full-972003/69712858 (visited on July 8, 2025)<be/>
