@@ -1,0 +1,218 @@
+import sys
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QFormLayout, QGroupBox, QSlider
+from PyQt5.QtCore import Qt
+
+from vispy.app import use_app
+use_app("pyqt5") # VisPy가 PyQt5 백엔드를 사용하도록 설정
+
+from pneumatic_tube_simulation import PneumaticTubeSimulation # 수정된 시뮬레이션 코드 임포트
+
+class MainWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("공압 튜브 시뮬레이션 제어")
+        self.setGeometry(100, 100, 1200, 800)
+
+        self.simulation = None # 시뮬레이션 인스턴스
+
+        self.init_ui()
+
+    def init_ui(self):
+        main_layout = QVBoxLayout()
+
+        # 1. 매개변수 설정 영역
+        param_group_box = QGroupBox("시뮬레이션 매개변수")
+        param_layout = QFormLayout()
+
+        self.carrier_mass_input = QLineEdit("0.1")
+        param_layout.addRow("캐리어 질량 (kg):", self.carrier_mass_input)
+
+        self.carrier_diameter_input = QLineEdit("0.113")
+        param_layout.addRow("캐리어 직경 (m):", self.carrier_diameter_input)
+
+        self.tube_length_input = QLineEdit("1.0")
+        param_layout.addRow("튜브 길이 (m):", self.tube_length_input)
+
+        self.air_density_input = QLineEdit("1.225")
+        param_layout.addRow("공기 밀도 (kg/m³):", self.air_density_input)
+
+        self.tube_friction_slider = QSlider(Qt.Horizontal)
+        self.tube_friction_slider.setRange(1, 50) # 0.01 ~ 0.5
+        self.tube_friction_slider.setValue(10) # 0.1
+        self.tube_friction_label = QLabel("0.1")
+        self.tube_friction_slider.valueChanged.connect(lambda val: self.tube_friction_label.setText(str(val/100.0)))
+        param_layout.addRow("튜브 마찰 계수:", self.create_slider_with_label_layout(self.tube_friction_slider, self.tube_friction_label))
+
+        self.air_drag_coefficient_slider = QSlider(Qt.Horizontal)
+        self.air_drag_coefficient_slider.setRange(1, 10) # 0.1 ~ 1.0
+        self.air_drag_coefficient_slider.setValue(5) # 0.5
+        self.air_drag_coefficient_label = QLabel("0.5")
+        self.air_drag_coefficient_slider.valueChanged.connect(lambda val: self.air_drag_coefficient_label.setText(str(val/10.0)))
+        param_layout.addRow("공기 저항 계수:", self.create_slider_with_label_layout(self.air_drag_coefficient_slider, self.air_drag_coefficient_label))
+
+        self.brake_force_coeff_slider = QSlider(Qt.Horizontal)
+        self.brake_force_coeff_slider.setRange(1, 20) # 0.1 ~ 2.0
+        self.brake_force_coeff_slider.setValue(5) # 0.5
+        self.brake_force_coeff_label = QLabel("0.5")
+        self.brake_force_coeff_slider.valueChanged.connect(lambda val: self.brake_force_coeff_label.setText(str(val/10.0)))
+        param_layout.addRow("에어 브레이크 힘 계수:", self.create_slider_with_label_layout(self.brake_force_coeff_slider, self.brake_force_coeff_label))
+
+        self.blower_pressure_blow_input = QLineEdit("1000")
+        param_layout.addRow("송풍기 과압 (Pa):", self.blower_pressure_blow_input)
+
+        self.blower_pressure_suck_input = QLineEdit("-500")
+        param_layout.addRow("송풍기 진공압 (Pa):", self.blower_pressure_suck_input)
+
+        self.brake_start_position_input = QLineEdit("0.8")
+        param_layout.addRow("브레이크 시작 위치 (m):", self.brake_start_position_input)
+
+        self.switch_detection_position_input = QLineEdit("0.8")
+        param_layout.addRow("스위치 감지 위치 (m):", self.switch_detection_position_input)
+
+        param_group_box.setLayout(param_layout)
+        main_layout.addWidget(param_group_box)
+
+        # 2. 시뮬레이션 제어 버튼
+        control_layout = QHBoxLayout()
+        self.start_button = QPushButton("시작")
+        self.start_button.clicked.connect(self.start_simulation)
+        self.stop_button = QPushButton("정지")
+        self.stop_button.clicked.connect(self.stop_simulation)
+        self.reset_button = QPushButton("재설정")
+        self.reset_button.clicked.connect(self.reset_simulation)
+        control_layout.addWidget(self.start_button)
+        control_layout.addWidget(self.stop_button)
+        control_layout.addWidget(self.reset_button)
+        main_layout.addLayout(control_layout)
+
+        # 3. VisPy 시뮬레이션 캔버스 영역
+        self.vispy_canvas_container = QWidget()
+        self.vispy_canvas_layout = QVBoxLayout()
+        self.vispy_canvas_container.setLayout(self.vispy_canvas_layout)
+        main_layout.addWidget(self.vispy_canvas_container, 1) # 확장 가능하도록 설정
+
+        # 4. 시뮬레이션 결과 표시 영역
+        result_group_box = QGroupBox("시뮬레이션 결과")
+        result_layout = QFormLayout()
+        self.time_to_switch_label = QLabel("N/A")
+        result_layout.addRow("스위치 도달 시간 (s):", self.time_to_switch_label)
+        result_group_box.setLayout(result_layout)
+        main_layout.addWidget(result_group_box)
+
+        self.setLayout(main_layout)
+
+    def create_slider_with_label_layout(self, slider, label):
+        h_layout = QHBoxLayout()
+        h_layout.addWidget(slider)
+        h_layout.addWidget(label)
+        return h_layout
+
+    def start_simulation(self):
+        if self.simulation and self.simulation.timer.running:
+            print("시뮬레이션이 이미 실행 중입니다.")
+            return
+
+        # 기존 시뮬레이션이 있다면 정리
+        if self.simulation:
+            self.simulation.timer.stop()
+            # 기존 캔버스 제거
+            if self.simulation.visualizer.canvas.native.parent() is not None:
+                self.vispy_canvas_layout.removeWidget(self.simulation.visualizer.canvas.native.parent())
+                self.simulation.visualizer.canvas.close()
+            self.simulation = None
+
+        # GUI에서 매개변수 값 읽기
+        try:
+            carrier_mass = float(self.carrier_mass_input.text())
+            carrier_diameter = float(self.carrier_diameter_input.text())
+            tube_length = float(self.tube_length_input.text())
+            air_density = float(self.air_density_input.text())
+            tube_friction_coeff = self.tube_friction_slider.value() / 100.0
+            air_drag_coefficient = self.air_drag_coefficient_slider.value() / 10.0
+            brake_force_coeff = self.brake_force_coeff_slider.value() / 10.0
+            blower_pressure_blow = float(self.blower_pressure_blow_input.text())
+            blower_pressure_suck = float(self.blower_pressure_suck_input.text())
+            brake_start_position = float(self.brake_start_position_input.text())
+            switch_detection_position = float(self.switch_detection_position_input.text())
+        except ValueError:
+            print("오류: 모든 입력 필드에 유효한 숫자를 입력해주세요.")
+            return
+
+        # PneumaticTubeSimulation 인스턴스 생성 및 매개변수 전달
+        self.simulation = PneumaticTubeSimulation(
+            carrier_mass=carrier_mass,
+            carrier_diameter=carrier_diameter,
+            tube_length=tube_length,
+            air_density=air_density,
+            tube_friction_coeff=tube_friction_coeff,
+            air_drag_coefficient=air_drag_coefficient,
+            brake_force_coeff=brake_force_coeff,
+            blower_pressure_blow=blower_pressure_blow,
+            blower_pressure_suck=blower_pressure_suck,
+            brake_start_position=brake_start_position,
+            switch_detection_position=switch_detection_position
+        )
+
+        # VisPy 캔버스를 PyQt 레이아웃에 추가
+        self.vispy_canvas_layout.addWidget(self.simulation.visualizer.canvas.native)
+
+        # 시뮬레이션의 update 함수에 연결하여 스위치 도달 시간 업데이트
+        self.simulation.timer.connect(self.update_simulation_data)
+
+        self.simulation.timer.start()
+        print("시뮬레이션 시작")
+
+    def update_simulation_data(self, event):
+        # 시뮬레이션의 update 메서드가 호출될 때마다 이 함수도 호출됩니다.
+        # 스위치 도달 시간이 기록되었는지 확인하고 GUI 업데이트
+        if self.simulation.switch_detected_flag and self.simulation.time_to_switch is not None:
+            self.time_to_switch_label.setText(f"{self.simulation.time_to_switch:.2f} s")
+            # 스위치 도달 시간은 한 번만 기록되므로, 이후에는 연결을 해제할 수 있습니다.
+            # 하지만 시뮬레이션이 종료될 때까지 계속 업데이트되도록 두는 것이 더 나을 수 있습니다.
+
+        # 시뮬레이션 종료 조건에 따라 GUI 업데이트 (예: 시뮬레이션이 멈췄을 때)
+        if not self.simulation.timer.running:
+            if self.simulation.time_to_switch is not None:
+                self.time_to_switch_label.setText(f"{self.simulation.time_to_switch:.2f} s")
+            else:
+                self.time_to_switch_label.setText("N/A (스위치 미도달)")
+
+
+    def stop_simulation(self):
+        if self.simulation:
+            self.simulation.timer.stop()
+            print("시뮬레이션 정지")
+
+    def reset_simulation(self):
+        self.stop_simulation()
+        # 매개변수 입력 필드를 초기값으로 되돌림
+        self.carrier_mass_input.setText("0.1")
+        self.carrier_diameter_input.setText("0.113")
+        self.tube_length_input.setText("1.0")
+        self.air_density_input.setText("1.225")
+        self.tube_friction_slider.setValue(10)
+        self.air_drag_coefficient_slider.setValue(5)
+        self.brake_force_coeff_slider.setValue(5)
+        self.blower_pressure_blow_input.setText("1000")
+        self.blower_pressure_suck_input.setText("-500")
+        self.brake_start_position_input.setText("0.8")
+        self.switch_detection_position_input.setText("0.8")
+
+        # 시뮬레이션 결과 레이블 초기화
+        self.time_to_switch_label.setText("N/A")
+
+        # 시뮬레이션 인스턴스 초기화 (필요시)
+        if self.simulation:
+            # 기존 캔버스 제거
+            if self.simulation.visualizer.canvas.native.parent() is not None:
+                self.vispy_canvas_layout.removeWidget(self.simulation.visualizer.canvas.native.parent())
+                self.simulation.visualizer.canvas.close()
+            self.simulation = None
+        print("시뮬레이션 재설정")
+
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    main_window = MainWindow()
+    main_window.show()
+    sys.exit(app.exec_())
